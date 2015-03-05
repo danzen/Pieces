@@ -1,0 +1,762 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Pieces</title> <!-- by Dan Zen 2014 - http://danzen.com - free to modify -->
+
+<link rel="shortcut icon" type="image/ico" href="favicon.ico" />
+
+<!-- for Google -->
+<meta name="description" content="Describe App" />
+<meta name="keywords" content="keyword 1, keyword 2" />    
+<meta name="author" content="App Creator" />
+<meta name="copyright" content="App Company" />
+
+<!-- for Facebook -->          
+<meta property="og:title" content="App Title" />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="url_to-image_for_facebook" />
+<meta property="og:url" content="url_of_app" />
+<meta property="og:description" content="Describe App - shows in share" />
+
+<!-- for Twitter -->          
+<meta name="twitter:card" content="summary" /> <!-- do not edit this line (must say "summary") -->
+<meta name="twitter:title" content="App Title" />
+<meta name="twitter:description" content="Describe App - shows on Twitter" />
+<meta name="twitter:image" content="url_to-image" />
+
+<!-- for Apple -->
+<!-- found user-scalable=no worked best for full screen auto scaling -->
+<meta name="viewport" content="user-scalable=no, minimal-ui" />
+<!--<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimal-ui" />--> 
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="apple-touch-icon-precomposed" href="url_to_icon_57x57" />
+
+<script>var zon = true; // true for comments from zim code</script>
+<script src="js/zim_1.3.1.js"></script>
+<script src="js/ajax.js"></script>
+
+<style>
+	body {margin:0px; padding:0px; background-color:#000;}
+	#myCanvas {position:absolute; background-color:#000;}
+	#myExtra {position:absolute; display:none; z-index:2;}
+	@font-face { 
+		font-family: wildwoodBold;
+		src: url(fonts/ChurchintheWildwood-Bold.ttf);
+	}
+	@font-face {
+		font-family: wildwood;
+		src: url(fonts/ChurchintheWildwood-Regular.ttf);
+	}
+	@font-face {
+		font-family: zebrawood;
+		src: url(fonts/Zebrawood-Fill.otf);
+	}
+	
+	#fpCodeWord, #hpMakeCodeWord, #hpMakePassWord, #hpCodeWord, #hpPassWord, #hpStoryTitle, #hpStoryText, #hpSponsorUrl1, #hpSponsorUrl2 {
+		padding:5px;
+		color:#666;
+		background-color:#ddd;
+		font-family:verdana;
+		position:relative;
+		resize:none;
+	}	
+	
+	input[type="file"] {
+		position:relative;
+		cursor:pointer;
+	}
+</style>
+
+<!-- include the complete createJS suite
+or can go to createjs.com for individual code 
+
+EaselJS - working with Canvas - drawing and objects
+TweenJS - animation with code
+SoundJS - working with Sound
+PreloadJS - preload images to work with
+
+-->
+
+<script src="js/createjs-2014.12.12.min.js"></script>
+
+<script src="mvc/model.js"></script>
+<script src="mvc/view_main.js"></script>
+<script src="mvc/view_hide.js"></script>
+<script src="mvc/view_find.js"></script>
+<script src="mvc/controller.js"></script>
+
+<script>
+
+// ------------------   TOP TEMPLATE  ------------------ (APP STARTS AT START APP)
+
+// SCALING OPTIONS
+// "none"		no scaling and uses the stageW and stageH dimensions
+// "fit"		scales canvas dimensions to fit inside window size
+// "outside"	scales canvas dimensions to fit outside window size
+// "full"		no scaling, just sets canvas to screen size 
+// for full, the stageW and stageH will be automatically adjusted
+// to match window size - so do not bother setting them below 
+// for all the others, the stageW and stageH do not change
+// and will be the values you put below
+
+// COMBINED
+// you can combine full and fit - set scaling to full 
+// then put a createjs Container with bounds set as your "workArea" 
+// then zim.fit(workArea, 0, 0, stageW, stageH);
+// all your dimensions will be relative to the workArea bounds
+// yet your content will be able to go everywhere on the screen
+// there will be no bounding edges like in fit scaling mode
+
+// WARNING
+// have found that on mobile apple in full mode 
+// we need to set the viewport to content="user-scalable=no" (but who really knows)
+
+var scaling = "full"; 
+var stageW = 500; // ignored if scaling is full
+var stageH = 500;
+var largest; // automatically set
+var appOrientation; // watch out - orientation keyword is used by apple - sigh
+var lastOrientation; // used to detect orientation change
+var cjs = createjs; // shorter namespace if desired
+var stage;
+var preload;
+var progress;
+var zilEvents; // events to stop page from moving
+var appReady = false; // check variable - set true when ready ;-) (watch - "ready" is reserved)
+
+var initH = 0;
+
+window.addEventListener('load', init);
+if (scaling != "none") window.addEventListener('resize', sizeCanvas);
+
+function init() {
+
+	// for mobile - pan to the bottom, hides the location bar
+	// need to set a delay though
+	// setTimeout(function() {window.scrollTo(0, 1);}, 100); 
+	
+	if (scaling != "none") sizeCanvas();
+	if (scaling == "full") zilEvents = zil(); // keep canvas still (from arrows, scrollwheel, etc.)
+	stage = new createjs.Stage("myCanvas"); 
+	stage.setBounds(0, 0, stageW, stageH);
+	stage.enableMouseOver(10); // if you need mouse rollover
+	createjs.Touch.enable(stage,true); // added for mobile	
+	
+	makeProgress();
+	initH = window.innerHeight;
+	// setInterval(function() {zid("fpCodeWord").value = window.innerHeight; if (initH != window.innerHeight) {zog(initH,window.innerHeight); sizeCanvas;}}, 1000);
+	// setInterval(sizeCanvas, 10000);
+
+	// activate these at end to add images and sound
+	var contentPath = "content/";
+	manifest = [{src:"home_s.jpg", id:"home"},{src:"homeT_s.jpg", id:"homeT"}, {src:"find_s.jpg", id:"find"}, {src:"hide_s.jpg", id:"hide"}, {src:"alert.png", id:"alert"}]; // array of objects
+	for (var i=1; i<=9; i++) {
+		manifest.push({src:"b"+i+".jpg", id:"b"+i});
+		manifest.push({src:"h"+i+".jpg", id:"h"+i});
+	}	preload = new createjs.LoadQueue(false, contentPath); // use true if on the same server	
+	// preload.installPlugin(createjs.Sound); // sound requires this plugin call
+	preload.on("progress", animateProgress); // this will update the progress
+	preload.on("complete", pieces);	 // call the main code when ready	
+	preload.loadManifest(manifest);	
+	
+	// pieces(); // comment this out when you have preload going
+	
+}
+
+function makeProgress() {
+	
+	progress = new createjs.Container();
+	// more code in here to make bar or text or whatever, etc.
+	// we do not animate the progress here - we do that in preloadProgress()
+	stage.addChild(progress);
+	stage.update();
+	
+}
+
+function animateProgress(e) {
+	
+	// zog("progress " + e.target.progress);	
+	// this event runs quite quickly and often
+	// e.target is the preload object in this case
+	// the progress property gives a number from 0-1 representing progress
+	// in percent we would multiply by 100
+	// we would operate on the progress object we established in makeProgress() 
+
+}
+
+// ------------------   END TOP TEMPLATE  ------------------ 
+
+// there are a few things to do above
+// such as set scale mode, perhaps stageW and stageH, preload things
+// and adjust the appName() function in the init() call above
+
+// ------------------      START APP      ------------------ 
+
+// app global variables here (such as layoutManager, guideManager, gridManager, pages)
+
+var data;
+var layoutManager;
+var guideManager;
+var gridManager;
+var mainPages; // holds the ZIM Pages objects direct navigation and handle swipes
+var hidePages;
+var findPages;
+var mp; var hp; var fp; // holds all laid out page assets for main pages, hide and find pages
+var waiter;
+var backings = [];
+var overlays; // holds things like pop Panes and Waiters
+
+function pieces() {
+	
+	zog("hi from Pieces"); 
+	
+	// INTRODUCTION
+	// the strategy is to start with a central page
+	// swiping down shows the Hide page which comes from above (up)
+	// or swiping up shows the Find page which comes from below (down)
+	// once on the hide or find page we swipe left to show the page on the right
+	// we continue to swipe left to show more pages in that section
+	// at any time, we can swipe back to the middle page
+		
+	// PAGE SWIPING
+	// this is more complicated than simply a linear path horizontally or vertically
+	// it is also more complicated than a grid 
+	// ZIM has a Pages class that lets you swipe between pages with a Pages object
+	// both linear and a grid can be accomplished with one Pages class
+	// to handle our current strategy we will use three Pages objects
+	// the first Pages object will handle three pages that swipe vertically
+	// Hide at top, the main menu page in the middle and Find at bottom
+	// we then nest a second Pages object as the Hide page
+	// the second Pages object swipes horizontally
+	// however, any vertical swipe acts on the first Pages object
+	// so on any Hide pages we can swipe up to reveal the main menu page
+	// the third Pages object goes on the Find page and swipes horizontally
+	// the Pages objects handle navigation and transitions automatically
+	// a "page" event is also triggered for extra functionality
+	
+	// HOTSPOTS
+	// instead of having buttons all over the place we define them centrally
+	// with the ZIM HotSpots class which puts hotSpots on pages in certain locations
+	// you specify a rectangle or an object to put the hotSpot on
+	// each hotSpot has an associated page object and a string id
+	// and a callback function for when the spot is clicked
+	// the functions generally call the Pages objects' go() method
+	// but some hotSpots also do things other than navigation
+	
+	// ASSET HANDLING
+	// basically we preload the initial images and make the first three pages
+	// and then call a function for creating all the Hide pages
+	// these are stored in a hp object
+	// and then we call a function for creating all the Find pages
+	// these are stored in a fp object
+	// we use the ZIM Grid class to make a layout grid to position elements
+	// use the G key to toggle the grid
+	
+	// DATA HANDLING
+	// the Hide section has data and image uploads 
+	// that get stored on the server and in a database
+	// the Find section has assets that come from the database
+	// these get loaded once a code word is submitted
+	// this makes the app a little trickier as we do not have all the assets at start
+	// so various asyncronous data occurs through AJAX calls
+	
+	
+	//////////////////////////////////////////////////////////////////////////////
+	
+	// PART 0 - INIT
+	
+	// pages will have assets positioned with ZIM Layout objects
+	// these can be stored and managed with LayoutManagers
+	layoutManager = new zim.LayoutManager();	
+		
+	// ZIM Grids show either percentage or pixel lines to help layout
+	// sometimes we might want specific grids for scaled content regions
+	// these can be stored and managed with the GridManager	
+	gridManager = new zim.GridManager();
+	
+	// ZIM Guides show a horizontal or vertical dragable line
+	// then a text field shows the distance of your cursor from the line
+	// handy for measuring the distance between things in percent or pixels
+	// these can be stored and managed with the GuideManager	
+	guideManager = new zim.GuideManager();	
+	
+	// make a ZIM Waiter object to show page is loading 
+	// the controller will waiter.show() and waiter.hide() as needed
+	waiter = new zim.Waiter(stage); // other parameters available	
+	
+	
+	// PART 1 - DATA (MODEL.JS)
+	
+	// app is the namespace set out for the current application
+	// see the model.js for an example 
+	// NOTE: would really put the data call up in the init function
+	// but wanted to separate from template for demonstration
+	
+	data = new app.Data(); // in model.js - go get initial data 
+	
+	
+	// PART 2 - CREATE ASSETS (VIEW JS PAGES)
+	
+	// call functions in the view_main, view_hide and view_find js files
+	// to prepare asset pages stored in containers with name properties
+	// for example fp.code, fp.intro, fp.story, etc.
+	// they will have buttons and input fields exposed
+	// for example hp.codeNext is the next button on the code page	
+	// these are all laid out with Layout objects stored in layoutManager
+	
+	
+	mp = app.mLayouts(); // main pages layouts (home, hide and find backings);
+	hp = app.hLayouts(); // hide pages layouts;
+	fp = app.fLayouts(); // find pages layouts;
+	
+	
+	// organize the Hide pages with a ZIM Pages object
+	// which handles transitions and swipe control
+	// any buttons and hotspots are handled with the HotSpots class
+	// the HotSpots object is created later but calls hidePages.go()
+	// create Pages and pass in the names of pages and directions
+	// to the left, right, up, and down
+	
+	// pages with a save button will not get swipes to the next screen
+	// same with any pages with code verification
+	// they get only the click on the save HotSpot
+	
+	hidePages = new zim.Pages(stage,[
+		{page:hp.first, swipe:[null,null,null,null]},	
+		{page:hp.code, swipe:[hp.first,null,null,null]},
+		{page:hp.edit, swipe:[hp.first,null,null,null]},
+		{page:hp.intro, swipe:[hp.code,null,null,null]},
+		{page:hp.story, swipe:[hp.intro,null,null,null]},
+		{page:hp.pieces, swipe:[hp.story,null,null,null]},
+		{page:hp.tile, swipe:[hp.pieces,null,null,null]},
+		{page:hp.game, swipe:[hp.tile,null,null,null]},
+		{page:hp.sponsor, swipe:[hp.game,null,null,null]}		
+	], "none", 200);
+	
+	/*
+	hidePages.transitionTable = [
+			[fp.first,fp.code,"none"],[fp.code,fp.first,"none"],
+			[fp.story,fp.tile,"none"],[fp.tile,fp.story,"none"],
+			[fp.tile,fp.look,"none"],[fp.look,fp.tile,"none"]
+			
+	];
+	*/
+	
+	// all these pages get added to the hide page
+	// this allows us to swipe sideways through the pages
+	// but at any time, swipe down to go back to the main page
+	mp.hide.addChild(hidePages);
+				
+	// organize the Find pages with a ZIM Pages object
+	// which handles transitions and swipe control
+	// any buttons and hotspots are handled with the HotSpots class
+	// the HotSpots object is created later but calls findPages.go()
+	// create Pages and pass in the names of pages and directions
+	// to the left, right, up, and down
+	
+	findPages = new zim.Pages(stage,[
+		{page:fp.code, swipe:[null,null,null,null]},
+		{page:fp.intro, swipe:[fp.code,fp.story,null,null]},
+		{page:fp.story, swipe:[fp.intro,fp.tile,null,null]},
+		{page:fp.tile, swipe:[fp.story,fp.look,null,null]},
+		{page:fp.look, swipe:[fp.tile,null,null,null]}
+	], "fade", 200);
+	
+	// if we want to override transitions we can do so like so
+	// in this case we do, because consecutive pages have the same title
+	// and we do not want to transition the same title in and out
+	
+	findPages.transitionTable = [
+			[fp.intro,fp.story,"none"],[fp.story,fp.intro,"none"],
+			[fp.story,fp.tile,"none"],[fp.tile,fp.story,"none"],
+			[fp.tile,fp.look,"none"],[fp.look,fp.tile,"none"]		
+	];
+	
+	mp.find.addChild(findPages);
+	
+
+	// organize main pages with a ZIM Pages object
+	// this gives vertical swiping between the Hide, Main Menu and Find sections
+	// names of pages in directions to the left, right, up, and down
+		
+	mainPages = new zim.Pages(stage,[
+		{page:mp.home, swipe:[null,"info",mp.hide,mp.find]},
+		{page:mp.hide, swipe:[null,null,null,mp.home]},
+		{page:mp.find, swipe:[null,null,mp.home,null]}
+	], "reveal", 200); // "reveal" // "slide" // default is "instant"
+	stage.addChild(mainPages);
+	
+	
+	overlays = new cjs.Container();
+	stage.addChild(overlays);
+	overlays.setBounds(0,0,640,640); // will scale to center fit stage
+	
+	
+	// PART 3 - ADD FUNCTIONALITY (CONTROLLER.JS)
+	
+	// this handles all ZIM hotSpots press navigation and interface
+	// and any swipe code not automatically handled by Pages objects
+	
+	var hs = app.makeFunctionality();
+	
+	
+	
+	// forcing nav to page being worked on
+	// hidePages.go(hp.sponsor, "right");
+	// mainPages.go(mp.hide, "up");
+	
+	layoutManager.dispose();
+
+	// keep at end of main function
+	// for the fit scale mode you will probably need to code below
+	// to scale things as the screen size varies	
+
+	appReady = true;
+	zss("myExtra").display = "block";
+	fullResize();
+	stage.update();	
+}
+
+
+// used in full scaling mode to resize content (not needed for none, fit and outside modes)
+// resize layoutManagers, guideManagers, gridManagers, pages
+// handle orientation changes by disabling and enabling layoutManagers and pages
+// see ZIM Pages live example
+
+function fullResize() { // called from the sizeCanvas() function below if in full mode 
+
+	if (!appReady) return;	
+	
+	// do any custom scaling
+	
+	
+	// here is a guideline for using the ZIM Pages module
+	// if orientation change then swap Pages objects
+	// puff new pages and resize before puff settles ;-)
+	/*		
+	if (appOrientation != lastOrientation) {
+		lastOrientation = appOrientation;
+		if (appOrientation == "horizontal") {
+			// disable and enable appropriate pages and layoutManager
+		} else {
+			// disable and enable appropriate pages and layoutManager
+		}
+	} else {
+		if (appOrientation == "horizontal") {
+			// just update appropriate layoutManager			
+		} else {
+			// just update appropriate layoutManager			
+		}
+	}		
+	if (appOrientation == "horizontal") {
+		// resize appropriate pages (because of transition)
+	} else {
+		// resize appropriate pages (because of transition)			
+	}	
+	// if no orientation change, just resize the pages
+	*/
+	
+	// if no orientation change, just resize the layoutManager
+	layoutManager.resize();
+	
+	// if no orientation change, just resize the pages
+	mainPages.resize();	
+	hidePages.resize();	
+	findPages.resize();	
+	
+	// resize the guideManager
+	guideManager.resize();
+	
+	// resize the gridManager
+	gridManager.resize();
+	
+	// scale overlays
+	if (overlays) zim.fit(overlays, 0,0,stageW,stageH);
+	
+	// resize any extra HTML content like input fields
+	// I had some problems scaling DOMElement so here is what I did:
+	
+	// this code would go down in your HTML
+	// you may want to display:none initially
+	// and once your app is ready and resized, display:block 
+	// or store all the input fields in a div and set display:none on that
+	// <input type="text" width="400" id="fieldID" />
+	
+	// this code would go where you make your content:
+	// var dField = new cjs.DOMElement(zid("fieldID"));
+	// stage.addChild(dField);
+	// dField.alpha = 0; // ready field for tween
+	// var textShape = new createjs.Shape;
+	// textShape.graphics.f("white").r(0,0,200,50); // or whatever
+	// textShape.setBounds(0,0,200,50);
+	// and add this to the content - positioned and scaled it, etc. 
+	
+	// this code would go here in the scaling function:
+	// get the rectangle of the textShape relative to the stage
+	// var b = zim.boundsToGlobal(textShape);
+	// and position and scale the HTML input tag to those bounds
+	// var field = zss("fieldID");
+	// field.left = (b.x)+"px";
+	// field.top = (b.y)+"px";	
+	// field.width = (b.width)+"px";
+	// field.fontSize = (b.height/2)+"px";
+	// note we let the HTML figure out the height of the rectangle
+	// based in a tweaked fontSize scale
+	
+	// then finally, when you are ready to show your input field
+	// use this code to fade the text in and similar code to fade out
+	// zim.animate(dField, {alpha:1}, 400); 
+	// anytime you want to know what is in your text field
+	// use zid("fieldID").value
+	// the Dan Zen Pieces app uses this technique http://pieces.mobi
+	
+	// move the extra container to the stage position
+	// unfortunately, scaling the container does not scale the contents
+	var can = zss("myCanvas");
+	var extra = zss("myExtra");
+	extra.left = can.left;
+	extra.top = can.top;
+	
+	// for the hp code page (create new pieces)
+	var hpMakeCodeWord = zss("hpMakeCodeWord");	
+	var hpMakePassWord = zss("hpMakePassWord");
+	// for the hp edit page (edit existing pieces)
+	var hpCodeWord = zss("hpCodeWord");	
+	var hpPassWord = zss("hpPassWord");	
+	// for the hp intro upload button 
+	var hpIntroUpload = zss("hpIntroUpload");	
+	// for the hp sponsor1 upload button 
+	var hpSponsorUpload1 = zss("hpSponsorUpload1");	
+	var hpSponsorUpload2 = zss("hpSponsorUpload2");
+	var hpSponsorUrl1 = zss("hpSponsorUrl1");
+	var hpSponsorUrl2 = zss("hpSponsorUrl2");
+	// for the hp story page 
+	var hpStoryTitle = zss("hpStoryTitle");	
+	var hpStoryText = zss("hpStoryText");	
+	var b;
+	if (hp) {		
+		b = zim.boundsToGlobal(hp.codeWordShape);
+		
+		if (b) {
+			hpMakeCodeWord.left = (b.x)+"px";
+			hpMakeCodeWord.top = (b.y)+"px";	
+			hpMakeCodeWord.width = (b.width)+"px";
+			hpMakeCodeWord.fontSize = (b.height/2)+"px";
+		}
+		// now we scale input fields to fit bounds
+		// the bounds are made in the hide.js and find.js
+		b = zim.boundsToGlobal(hp.codePassShape);
+		if (b) {
+			hpMakePassWord.left = (b.x)+"px";
+			hpMakePassWord.top = (b.y)+"px";	
+			hpMakePassWord.width = (b.width)+"px";
+			hpMakePassWord.fontSize = (b.height/2)+"px";
+		}
+		
+		b = zim.boundsToGlobal(hp.editWordShape);
+		if (b) {
+			hpCodeWord.left = (b.x)+"px";
+			hpCodeWord.top = (b.y)+"px";	
+			hpCodeWord.width = (b.width)+"px";
+			hpCodeWord.fontSize = (b.height/2)+"px";
+		}
+		b = zim.boundsToGlobal(hp.editPassShape);
+		if (b) {
+			hpPassWord.left = (b.x)+"px";
+			hpPassWord.top = (b.y)+"px";	
+			hpPassWord.width = (b.width)+"px";
+			hpPassWord.fontSize = (b.height/2)+"px";
+		}
+		b = zim.boundsToGlobal(hp.introContent);
+		if (b) {
+			hpIntroUpload.left = (b.x)+"px";
+			hpIntroUpload.top = (b.y)+"px";	
+			hpIntroUpload.width = (b.width)+"px";
+			hpIntroUpload.height = (b.height)+"px";
+		}	
+		b = zim.boundsToGlobal(hp.sponsorTile1);
+		if (b) {
+			hpSponsorUpload1.left = (b.x)+"px";
+			hpSponsorUpload1.top = (b.y)+"px";	
+			hpSponsorUpload1.width = (b.width)+"px";
+			hpSponsorUpload1.height = (b.height)+"px";
+		}
+		b = zim.boundsToGlobal(hp.sponsorTile2);
+		if (b) {
+			hpSponsorUpload2.left = (b.x)+"px";
+			hpSponsorUpload2.top = (b.y)+"px";	
+			hpSponsorUpload2.width = (b.width)+"px";
+			hpSponsorUpload2.height = (b.height)+"px";
+		}
+		
+		b = zim.boundsToGlobal(hp.sponsorUrlShape1);
+		if (b) {
+			hpSponsorUrl1.left = (b.x)+"px";
+			hpSponsorUrl1.top = (b.y)+"px";	
+			hpSponsorUrl1.width = (b.width)+"px";
+			hpSponsorUrl1.fontSize = (b.height/2)+"px";
+		}
+		b = zim.boundsToGlobal(hp.sponsorUrlShape2);
+		if (b) {
+			hpSponsorUrl2.left = (b.x)+"px";
+			hpSponsorUrl2.top = (b.y)+"px";	
+			hpSponsorUrl2.width = (b.width)+"px";
+			hpSponsorUrl2.fontSize = (b.height/2)+"px";
+		}
+		
+		
+		b = zim.boundsToGlobal(hp.storyTitleShape);
+		if (b) {
+			hpStoryTitle.left = (b.x)+"px";
+			hpStoryTitle.top = (b.y)+"px";	
+			hpStoryTitle.width = (b.width)+"px";
+			hpStoryTitle.fontSize = (b.height/2)+"px";
+		}
+		b = zim.boundsToGlobal(hp.storyTextShape);
+		if (b) {
+			hpStoryText.left = (b.x)+"px";
+			hpStoryText.top = (b.y)+"px";	
+			hpStoryText.width = (b.width)+"px";
+			hpStoryText.height = (b.height)+"px";
+		}	
+		for (var i=0; i<backings.length; i++) {
+			b = backings[i];	
+			b.x = stageW / 2;			
+			zim.scale(b,stageH/b.getBounds().height);
+		}
+		if (app.positionTileButtons) app.positionTileButtons();
+	}
+	
+	// for the fp code page 
+	var fpCodeWord = zss("fpCodeWord");
+	if (fp) {		
+		b = zim.boundsToGlobal(fp.codeWordShape);
+		if (b) {
+			fpCodeWord.left = (b.x)+"px";
+			fpCodeWord.top = (b.y)+"px";	
+			fpCodeWord.width = (b.width)+"px";
+			fpCodeWord.fontSize = (b.height/2)+"px";
+		}
+		
+	}
+	
+
+	// and update the stage	
+	if (stage) stage.update();
+}
+
+
+// ------------------       END APP      ------------------ 
+
+
+
+// ------------------   BOTTOM TEMPLATE  ------------------ 
+
+// should not have to do anything below here
+// unless you need HTML code (such as input fields)
+
+function sizeCanvas() {
+	
+	var can = zid("myCanvas");	
+	var w = window.innerWidth;
+	var h = window.innerHeight; 	
+	var newH; 
+	var newW;	
+	
+	appOrientation = (w > h) ? "horizontal" : "vertical";
+
+	if (scaling == "fit") { 
+		// scales canvas to fit dimensions inside screen
+		if (w/h >= stageW/stageH) {
+			newH = h;
+			newW = newH*stageW/stageH;	
+		} else {
+			newW = w;
+			newH = newW*stageH/stageW;
+		}
+	} else if (scaling == "outside") { 
+		// scales canvas so screen inside dimensions
+		document.body.style.overflow = "hidden";
+		if (w/h >= stageW/stageH) {
+			newW = w;
+			newH = newW*stageH/stageW;	
+		} else {
+			newH = h;
+			newW = newH*stageW/stageH;			
+		}		
+	} else if (scaling == "full") { 
+		// does not scale canvas but sets width and height to screen
+		document.body.style.overflow = "hidden";
+		can.style.left = can.style.top = "0px";		
+		stageW = w;
+		stageH = h;			
+		if (stage) stage.setBounds(0,0,stageW,stageH);
+		fullResize();
+		return;
+	}
+	
+	can.style.width = newW + "px";
+	can.style.height = newH + "px"; 
+	
+	// horizontal center
+	can.style.left = ((w-newW)/2) + "px";
+	
+	// vertical center
+	can.style.top = ((h-newH)/2) + "px";
+}
+
+
+function makeCanvas() {
+	// note the width and height of a canvas
+	// are separate from from the width and height styles
+	// so beware of unintentionally stretching the canvas with styles
+		
+	var canvas = document.createElement("canvas");
+	canvas.setAttribute("id", "myCanvas");
+	largest = Math.max(window.innerWidth, screen.width, window.innerHeight, screen.height);
+	// does not work on iOS6 in full screen if loading from icon unless keep canvas at device size
+	// thank you apple for this and many other days of hell	
+	if (scaling == "full") {		
+		canvas.setAttribute("width", largest);
+		canvas.setAttribute("height", largest); 
+	} else {
+		canvas.setAttribute("width", stageW);
+		canvas.setAttribute("height", stageH);		
+	}		
+	document.body.appendChild(canvas);
+}
+
+</script>
+
+
+</head>
+
+<body>
+<script>makeCanvas();</script>
+<div id="myExtra">
+<input type="text" width="380" id="fpCodeWord" />
+<input type="text" width="380" id="hpMakeCodeWord" />
+<input type="text" width="380" id="hpMakePassWord" />
+<input type="text" width="380" id="hpCodeWord" />
+<input type="text" width="380" id="hpPassWord" />
+<input type="text" width="380" id="hpStoryTitle" />
+<textarea width="380" id="hpStoryText" rows="3"></textarea> 
+<input type="file" id="hpIntroUpload" onchange="app.uploadIntro()" accept="image/*" />
+<input type="file" id="hpSponsorUpload1" onchange="app.uploadSponsor(1)" accept="image/*" />
+<input type="text" width="380" id="hpSponsorUrl1" />
+<input type="file" id="hpSponsorUpload2" onchange="app.uploadSponsor(2)" accept="image/*" />
+<input type="text" width="380" id="hpSponsorUrl2" />
+<input type="file" id="hpTileUpload1" onchange="app.uploadTile(1)" accept="image/*" />
+<input type="file" id="hpTileUpload2" onchange="app.uploadTile(2)" accept="image/*" />
+<input type="file" id="hpTileUpload3" onchange="app.uploadTile(3)" accept="image/*" />
+<input type="file" id="hpTileUpload4" onchange="app.uploadTile(4)" accept="image/*" />
+<input type="file" id="hpTileUpload5" onchange="app.uploadTile(5)" accept="image/*" />
+<input type="file" id="hpTileUpload6" onchange="app.uploadTile(6)" accept="image/*" />
+<input type="file" id="hpTileUpload7" onchange="app.uploadTile(7)" accept="image/*" />
+<input type="file" id="hpTileUpload8" onchange="app.uploadTile(8)" accept="image/*" />
+<input type="file" id="hpTileUpload9" onchange="app.uploadTile(9)" accept="image/*" />
+</div>
+</body>
+</html>
